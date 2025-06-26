@@ -206,37 +206,52 @@ class FetchNodeLevelK(BaseNode):
             "wss:",
         }
 
+        # Pre-compute the base domain once (strip port + “www.” and IDNA-encode)
+        base_domain = urlparse(base_url).netloc.split(":")[0].lower().lstrip("www.")
+        try:
+            base_domain = base_domain.encode("idna").decode()
+        except UnicodeError:
+            # Extremely unlikely, but leave base_domain as-is if it happens
+            pass
+    
         full_links = []
         for link in links:
-            # Skip if link starts with any invalid scheme
+            # Skip links that start with any invalid scheme
             if any(link.lower().startswith(scheme) for scheme in invalid_schemes):
                 continue
-
+    
             # Convert relative URLs to absolute URLs first
-            try:
-                full_link = (
-                    link
-                    if link.startswith(("http://", "https://"))
-                    else urljoin(base_url, link)
-                )
-                
-                # Skip if it's an external link and only_inside_links is True
-                if self.only_inside_links and full_link.startswith(("http://", "https://")):
-                    # Parse URLs to compare domains
-                    base_domain = urlparse(base_url).netloc.lower().replace("www.", "")
-                    link_domain = urlparse(full_link).netloc.lower().replace("www.", "")
-                    
-                    # Skip if domains don't match
-                    if base_domain != link_domain:
-                        continue
-                
-                # Ensure the final URL starts with http:// or https://
-                if full_link.startswith(("http://", "https://")):
-                    full_links.append(full_link)
-            except Exception as e:
-                self.logger.warning(f"Failed to process link {link}: {str(e)}")
-
+            full_link = (
+                link
+                if link.startswith(("http://", "https://"))
+                else urljoin(base_url, link)
+            )
+    
+            # Filter out external links when only_inside_links is True
+            if self.only_inside_links:
+                try:
+                    link_domain = (
+                        urlparse(full_link)
+                        .netloc.split(":")[0]
+                        .lower()
+                        .lstrip("www.")
+                        .encode("idna")
+                        .decode()
+                    )
+                except UnicodeError as e:
+                    # Malformed domain — log and skip the link
+                    self.logger.warning(f"Skipping malformed link {full_link}: {e}")
+                    continue
+    
+                if base_domain != link_domain:
+                    continue
+    
+            # Ensure the final URL starts with http:// or https://
+            if full_link.startswith(("http://", "https://")):
+                full_links.append(full_link)
+    
         return full_links
+
 
     def obtain_content(self, documents: List, loader_kwargs) -> List:
         """
