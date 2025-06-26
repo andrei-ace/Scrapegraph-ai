@@ -223,8 +223,8 @@ class FetchNodeLevelK(BaseNode):
                 # Skip if it's an external link and only_inside_links is True
                 if self.only_inside_links and full_link.startswith(("http://", "https://")):
                     # Parse URLs to compare domains
-                    base_domain = urlparse(base_url).netloc
-                    link_domain = urlparse(full_link).netloc
+                    base_domain = urlparse(base_url).netloc.lower().replace("www.", "")
+                    link_domain = urlparse(full_link).netloc.lower().replace("www.", "")
                     
                     # Skip if domains don't match
                     if base_domain != link_domain:
